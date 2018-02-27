@@ -1,0 +1,116 @@
+# 1 "TP1.pml"
+# 1 "<built-in>"
+# 1 "<command-line>"
+# 31 "<command-line>"
+# 1 "/usr/include/stdc-predef.h" 1 3 4
+# 32 "<command-line>" 2
+# 1 "TP1.pml"
+
+
+
+
+
+chan badgeCanal = [0] of {int,int};
+
+
+chan voyantCanal = [0] of {int,int};
+
+
+chan porteCanal = [1] of {int};
+
+int nbPersonnesDansBatiment = 0;
+
+int nbPersonne = 1;
+int id = 0;
+
+init{
+    run personnes();
+    run porte();
+    run voyant();
+    run affichage();
+}
+
+inline wait(x)
+{
+    int a = 0;
+    do
+        ::a != x -> a = a + 1;
+        ::a == x -> break;
+    od;
+}
+
+proctype personnes()
+{
+    int i = 0;
+
+    do
+        ::if
+            ::(i < nbPersonne) ->
+                run personne();
+                wait(5000000);
+                i++;
+            ::else -> break;
+        fi;
+    od;
+}
+
+
+proctype personne(){
+    id++
+    int idpersonne = id;
+
+    do
+        ::
+        printf("\nUne personne a passé son badge pour rentrer ! L'id de la personne est : %d\n", idpersonne);
+        porteCanal ! 1;
+        wait(10000);
+        printf("\nUne personne est entré dans le batîment ! L'id de la personne est : %d\n", idpersonne);
+        porteCanal ! 1;
+        nbPersonnesDansBatiment++;
+        wait(4000000);
+        printf("\nUne personne a passé son badge pour sortir ! L'id de la personne est : %d\n", idpersonne);
+        porteCanal ! 1;
+        wait(10000);
+        printf("\nUne personne est sorti du batîment ! L'id de la personne est : %d\n", idpersonne);
+        porteCanal ! 1;
+        nbPersonnesDansBatiment--;
+        break;
+    od;
+}
+
+proctype porte(){
+    do
+        ::
+        porteCanal ? 1;
+        printf("\nLa porte est débloqué !\n");
+        voyantCanal ! 1;
+        wait(500000);
+        voyantCanal ! 0;
+        wait(1000000);
+        porteCanal ? 1;
+        printf("\nLa porte est bloqué ! \n");
+    od;
+}
+
+proctype voyant(){
+    do::
+        voyantCanal ? 1;
+        printf("\nLe voyant est vert ! \n");
+        wait(1000);
+        voyantCanal ? 0;
+        printf("\nLe voyant est rouge ! \n");
+    od;
+}
+
+proctype affichage(){
+    int nbtour = 1;
+    do
+        ::
+        wait(3000000);
+        printf("\n\n\n\n\n\n\n\n\n\n\n\n");
+        printf("BATIMENT MAURIENNE (%d)\n\n", nbtour);
+        printf("Nombre de personnes présents dans le batîment : %d \n\n\n", nbPersonnesDansBatiment);
+        printf("\n\n\n\n\n\n");
+        nbtour++;
+    od;
+}

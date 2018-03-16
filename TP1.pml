@@ -1,23 +1,22 @@
-#define ouvert 1
-#define ferme 1
+#define ouvert 99
+#define ferme 99
 #define vert 1
 #define rouge 0
+#define oui 1
+#define non 0
 
-chan badgeCanal = [0] of {int,int};
-
+chan STDIN;	/* no channel initialization */
+chan autorise = [1] of { int };
 //Voyant : vert/rouge
-chan voyantCanal = [0] of {int,int};
-
+chan voyantCanal = [0] of {int};
 //Porte :  débloqué/bloqué
 chan porteCanal = [1] of {int};
-
 int nbPersonnesDansBatiment = 0;
-
 int nbPersonne = 1;
-int id = 0;
 
 init{
-    run personnes();
+    run simulateur();
+    //run personnes();
     run porte();
     run voyant();
     run affichage();
@@ -32,57 +31,73 @@ inline wait(x)
     od;
 }
 
-proctype personnes()
-{
-    int i = 0;
-
+proctype simulateur(){
+    int c;
+    printf("\nAppuyer sur 1,3,5 pour un badge autorisé ou 2,4 pour un non-autorisé.\n");
     do
-        ::if
-            ::(i < nbPersonne) ->
-                run personne();
-                wait(5000000);
-                i++;
-            ::else -> break;
-        fi;
-    od;
+        :: STDIN ? c ->
+            if
+            // Touche échap : quitter
+            :: c == 4 -> break
+            // Touches 1 à 5 pour les personnes
+            :: (c >= 49 && c <= 53) ->
+            int id_badge = c - 48;
+            run personne(id_badge);
+            // Autre entrée.
+            :: else -> printf("\nMauvaise entrée (échap pour quitter).\n");
+            fi
+    od    
 }
 
 
-proctype personne(){
-    id++
-    int idpersonne = id;
-
+proctype personne(int id_badge){
     do
         ::
-        printf("\nUne personne a passé son badge pour rentrer ! L'id de la personne est : %d\n", idpersonne);
-        porteCanal ! ouvert;
-        wait(10000);
-        printf("\nUne personne est entré dans le batîment ! L'id de la personne est : %d\n", idpersonne);
-        porteCanal ! ferme;
-        nbPersonnesDansBatiment++;
-        wait(4000000);
-        printf("\nUne personne a passé son badge pour sortir ! L'id de la personne est : %d\n", idpersonne);
-        porteCanal ! ouvert;
-        wait(10000);
-        printf("\nUne personne est sorti du batîment ! L'id de la personne est : %d\n", idpersonne);
-        porteCanal ! ferme;
-        nbPersonnesDansBatiment--;
+        int autorisation;
+        printf("\nUne personne a passé son badge pour rentrer ! L'id du badge est : %d\n", id_badge);
+        porteCanal ! id_badge;
+        autorise ? autorisation;
+        if
+            :: (autorisation == oui)
+            wait(10000);
+            printf("\nUne personne est entré dans le batîment ! L'id du badge est : %d\n", id_badge);
+            nbPersonnesDansBatiment++;
+        :: else -> break;
+        fi
+
+        wait(2000000);
+        printf("\nUne personne a passé son badge pour sortir ! L'id du badge est : %d\n", id_badge);
+        porteCanal ! id_badge;
+        autorise ? autorisation;
+        if
+            :: (autorisation == oui)
+            wait(10000);
+            printf("\nUne personne est sorti du batîment ! L'id du badge est : %d\n", id_badge);
+            nbPersonnesDansBatiment--;
+        :: else -> break;
+        fi
         break;
-    od;
+    od
 }
 
 proctype porte(){
-    do
+    do        
         ::
-        porteCanal ? ouvert;
-        printf("\nLa porte est débloqué !\n");
-        voyantCanal ! vert;
-        wait(500000);
-        voyantCanal ! rouge;
-        wait(1000000);
-        porteCanal ? ferme;
-        printf("\nLa porte est bloqué ! \n");
-    od;
+        int id;
+        porteCanal ? id
+        if 
+            :: (id == 1 || id == 3 || id == 5) ->
+            voyantCanal ! vert;
+            autorise! oui;
+            printf("\nLa porte est débloqué !\n");
+            wait(200000);
+            voyantCanal ! rouge;
+            printf("\nLa porte est bloqué ! \n");
+        :: else ->
+            autorise ! non;
+            printf("\nLa personne n'est pas autorisé\n");
+        fi
+    od
 }
 
 proctype voyant(){
@@ -99,7 +114,7 @@ proctype affichage(){
     int nbtour = 1;
     do
         ::
-        wait(3000000);
+        wait(1000000);
         printf("\n\n\n\n\n\n\n\n\n\n\n\n");
         printf("BATIMENT MAURIENNE (%d)\n\n", nbtour);
         printf("Nombre de personnes présents dans le batîment : %d \n\n\n", nbPersonnesDansBatiment);

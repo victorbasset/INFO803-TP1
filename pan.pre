@@ -5,28 +5,45 @@
 # 1 "/usr/include/stdc-predef.h" 1 3 4
 # 32 "<command-line>" 2
 # 1 "TP1.pml"
-
-
-
-
-
-
-
+# 18 "TP1.pml"
 chan STDIN;
-chan autorise = [1] of { int };
+
+
+
+chan autoriseCanal = [1] of { int };
 
 chan voyantCanal = [0] of {int};
 
 chan porteCanal = [1] of {int};
+
+chan laserCanal = [1] of {int, int};
+
+chan alarmeCanal = [1] of {int};
+
+chan incendieCanal = [1] of {int};
+
+
 int nbPersonnesDansBatiment = 0;
 int nbPersonne = 1;
+int detectionLaser = 0;
+
+typedef info{
+    int id;
+    int state;
+    int time;
+};
+
+info journal[100];
+int indice_journal = 0;
 
 init{
     run simulateur();
-
     run porte();
     run voyant();
     run affichage();
+    run laser();
+    run alarme();
+    run incendie();
 }
 
 inline wait(x)
@@ -35,7 +52,7 @@ inline wait(x)
     do
         ::a != x -> a = a + 1;
         ::a == x -> break;
-    od;
+    od
 }
 
 proctype simulateur(){
@@ -50,9 +67,30 @@ proctype simulateur(){
             :: (c >= 49 && c <= 53) ->
             int id_badge = c - 48;
             run personne(id_badge);
+            :: (c == 48) ->
+            incendieCanal ! 1;
 
             :: else -> printf("\nMauvaise entrée (échap pour quitter).\n");
             fi
+    od
+}
+
+inline afficher_journal(){
+    int i = 0;
+    printf("\n--------------JOURNAL--------------\n");
+    for(i:0 .. indice_journal-1){
+        printf("\nidentité: %d / état : %d / heure : %d\n",journal[i].id, journal[i].state, journal[i].time);
+    }
+}
+
+proctype incendie(){
+    do
+        ::
+        incendieCanal ? 1;
+        printf("\nUn incendie a été détecté !\n");
+        alarmeCanal ! 1;
+        porteCanal ! 0;
+        afficher_journal();
     od
 }
 
@@ -63,11 +101,15 @@ proctype personne(int id_badge){
         int autorisation;
         printf("\nUne personne a passé son badge pour rentrer ! L'id du badge est : %d\n", id_badge);
         porteCanal ! id_badge;
-        autorise ? autorisation;
+        autoriseCanal ? autorisation;
         if
             :: (autorisation == 1)
             wait(10000);
             printf("\nUne personne est entré dans le batîment ! L'id du badge est : %d\n", id_badge);
+            journal[indice_journal].id = id_badge;
+            journal[indice_journal].state = 1;
+            journal[indice_journal].time = indice_journal;
+            indice_journal++;
             nbPersonnesDansBatiment++;
         :: else -> break;
         fi
@@ -75,11 +117,15 @@ proctype personne(int id_badge){
         wait(2000000);
         printf("\nUne personne a passé son badge pour sortir ! L'id du badge est : %d\n", id_badge);
         porteCanal ! id_badge;
-        autorise ? autorisation;
+        autoriseCanal ? autorisation;
         if
             :: (autorisation == 1)
             wait(10000);
             printf("\nUne personne est sorti du batîment ! L'id du badge est : %d\n", id_badge);
+            journal[indice_journal].id = id_badge;
+            journal[indice_journal].state = 0;
+            journal[indice_journal].time = indice_journal;
+            indice_journal++;
             nbPersonnesDansBatiment--;
         :: else -> break;
         fi
@@ -92,18 +138,43 @@ proctype porte(){
         ::
         int id;
         porteCanal ? id
-        if
-            :: (id == 1 || id == 3 || id == 5) ->
+        if::(id == 1 || id == 3 || id == 5) ->
             voyantCanal ! 1;
-            autorise! 1;
+            autoriseCanal ! 1;
             printf("\nLa porte est débloqué !\n");
+            laserCanal ! 1, 1;
             wait(200000);
             voyantCanal ! 0;
             printf("\nLa porte est bloqué ! \n");
-        :: else ->
-            autorise ! 0;
+        :: (id == 0) ->
+            printf("\nToutes les portes sont débloquées !\n");
+        :: else
+            autoriseCanal ! 0;
             printf("\nLa personne n'est pas autorisé\n");
         fi
+    od
+}
+
+
+
+proctype laser(){
+    int nbPersonneDetecte;
+    do::
+        laserCanal ? 1, nbPersonneDetecte;
+        if::(nbPersonneDetecte > 1)
+        printf("\nLe laser a détecté plusieurs passages !\n");
+        alarmeCanal ! 1;
+        ::else
+        printf("\nLe laser détecte un passage !\n");
+        fi
+    od
+}
+
+
+proctype alarme(){
+    do::
+        alarmeCanal ? 1;
+        printf("\nL'alarme a été déclenché ! BIP BIP BIP !\n");
     od
 }
 
@@ -114,18 +185,15 @@ proctype voyant(){
         wait(1000);
         voyantCanal ? 0;
         printf("\nLe voyant est rouge ! \n");
-    od;
+    od
 }
 
 proctype affichage(){
-    int nbtour = 1;
     do
         ::
         wait(1000000);
-        printf("\n\n\n\n\n\n\n\n\n\n\n\n");
-        printf("BATIMENT MAURIENNE (%d)\n\n", nbtour);
+        printf("\n\n\n")
+        printf("BATIMENT MAURIENNE\n\n");
         printf("Nombre de personnes présents dans le batîment : %d \n\n\n", nbPersonnesDansBatiment);
-        printf("\n\n\n\n\n\n");
-        nbtour++;
-    od;
+    od
 }

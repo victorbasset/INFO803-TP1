@@ -14,11 +14,12 @@
 #define ENSEIGNANT 3
 #define ADMINISTRATIF 5
 
-#define VOLEUR 2
+#define DOUBLE 2
 #define ANONYMOUS 4
 
 #define OUVERTURE_SECOURS 9
 
+#define DEUX_SECONDES 100000
 #define CINQ_SECONDES 200000
 #define TRENTE_SECONDES 1200000
 
@@ -27,15 +28,17 @@ chan STDIN;	/* Entrée standart */
 // Autorisation de la porte : oui/non
 chan autoriseCanal = [1] of { int };
 // Voyant : vert/rouge
-chan voyantCanal = [0] of {int};
+chan voyantCanal = [1] of {int};
 // Porte :  ouvert/ferme
 chan porteCanal = [1] of {int};
-// Laser :  actif/desactive
+// Laser :  activé
 chan laserCanal = [1] of {int, int};
-// Alarme :  actif/desactive
+// Alarme :  activé
 chan alarmeCanal = [1] of {int};
-// Incendie :  actif/desactive
+// Incendie :  activé
 chan incendieCanal = [1] of {int};
+// Affichage status du bâtiment Maurienne :  activé
+chan journalCanal = [1] of {int, int};
 
 // Variables global
 int nbPersonnesDansBatiment = 0;
@@ -62,6 +65,7 @@ init{
     run laser();
     run alarme();
     run incendie();
+    run journalA();
 }
 
 // Méthode qui permet de simuler une attente
@@ -76,16 +80,16 @@ inline wait(x){
 // Méthode qui affiche la structure journal défini plus haut
 inline afficher_journal(){
     int i;
-    printf("\n--------------JOURNAL--------------\n");
+    printf("--------------------  JOURNAL  -------------------\n");
     for(i:0 .. indice_journal-1){
-        printf("\nidentité: %d / état : %d / heure : %d\n",journal[i].id, journal[i].state, journal[i].time);
+        printf("identité: %d / état : %d / heure : %d\n\n",journal[i].id, journal[i].state, journal[i].time);
     }
 }
 
 // Agent qui réagit aux interactions de l'utilisateur avec la console
 proctype simulateur(){
     int c;
-    printf("\nAppuyer sur 1,3,5 pour un badge autorisé ou 2,4 pour un non-autorisé.\n");
+    printf("\nAppuyer sur 1,3,5 pour un badge autorisé ou 2 pour faire rentrer deux personnes en même temps. 4 pour une personne non-autorisé.\n");
     do::
         STDIN ? c
         if:: (c == 4) // Echap : quitter
@@ -122,14 +126,12 @@ proctype personne(int id_badge){
         porteCanal ! id_badge;
         autoriseCanal ? autorisation;
         if::(autorisation == OUI) // Si le badge est valide
+            wait(DEUX_SECONDES);
             printf("\nUne personne est entré dans le batîment ! L'id du badge est : %d\n", id_badge);
             // Enregistrement de l'entré d'une personne dans le journal
-            journal[indice_journal].id = id_badge;
-            journal[indice_journal].state = ENTRE;
-            journal[indice_journal].time = indice_journal; // Optimise les performances le temps est simplement indice_journal
-            indice_journal++;
+            journalCanal ! id_badge, ENTRE;
             nbPersonnesDansBatiment++;
-        ::else // Si le badge est invalide
+        ::else
             break;
         fi
 
@@ -139,18 +141,27 @@ proctype personne(int id_badge){
         porteCanal ! id_badge;
         autoriseCanal ? autorisation;
         if::(autorisation == OUI) // Si le badge est valide
+            wait(DEUX_SECONDES);
             printf("\nUne personne est sorti du batîment ! L'id du badge est : %d\n", id_badge);
             // Enregistrement de la sorti d'une personne dans le journal
-            journal[indice_journal].id = id_badge;
-            journal[indice_journal].state = SORTI;
-            journal[indice_journal].time = indice_journal;
-            indice_journal++;
+            journalCanal ! id_badge, SORTI;
             nbPersonnesDansBatiment--;
-        ::else // Si le badge est invalide
-            break;
         fi
-
         break;
+    od
+}
+
+// Agent qui enregistre dans le journal : id , etat, temps de chaque entré/sorti d'une personne du bâtiment.
+proctype journalA(){
+    do::
+        int id;
+        int action;
+
+        journalCanal ? id, action
+        journal[indice_journal].id = id;
+        journal[indice_journal].state = action;
+        journal[indice_journal].time = indice_journal; // Optimise les performances le temps est simplement indice_journal
+        indice_journal++;
     od
 }
 
@@ -159,11 +170,15 @@ proctype porte(){
     do::
         int id;
         porteCanal ? id;
-        if::(id == ETUDIANT || id == ENSEIGNANT || id == ADMINISTRATIF) // Personnes autorisé
+        if::(id == ETUDIANT || id == ENSEIGNANT || id == ADMINISTRATIF || id == DOUBLE) // Personnes autorisé
             voyantCanal ! VERT;
             autoriseCanal ! OUI;
             printf("\nLa porte est débloqué !\n");
-            laserCanal ! ACTIF, 1; // ON PEUT CHANGER ICI LE NOMBRE DE PERSONNES RENTRÉ EN MEME TEMPS POUR SIMULER UNE FRAUDE.
+            if::(id == DOUBLE) // DOUBLE : deux personnes passe dans la porte (id : 2)
+                laserCanal ! ACTIF, 2;
+            ::else
+                laserCanal ! ACTIF, 1; 
+            fi
             wait(CINQ_SECONDES);
             voyantCanal ! ROUGE;
             printf("\nLa porte est bloqué ! \n");
@@ -192,7 +207,7 @@ proctype laser(){
 
 // Agent qui lance l'alarme
 proctype alarme(){
-    do::
+    do:: 
         alarmeCanal ? ACTIF;
         printf("\nL'alarme a été déclenché ! BIP BIP BIP !\n");
     od
@@ -212,9 +227,10 @@ proctype voyant(){
 proctype affichage(){
     do::
         wait(TRENTE_SECONDES);
-        printf("\n\n\n")
-        printf("BATIMENT MAURIENNE\n\n");
-        printf("Nombre de personnes présents dans le batîment : %d \n\n\n", nbPersonnesDansBatiment);
+        printf("\n\n");
+        printf("--------------  BATIMENT MAURIENNE  --------------\n");
+        printf("Nombre de personnes présents dans le batîment : %d \n\n", nbPersonnesDansBatiment);
+        afficher_journal();
     od
 }
 

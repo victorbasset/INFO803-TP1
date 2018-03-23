@@ -127,7 +127,7 @@ proctype personne(int id_badge){
         autoriseCanal ? autorisation;
         if::(autorisation == OUI) // Si le badge est valide
             wait(DEUX_SECONDES);
-            printf("\nUne personne est entré dans le batîment ! L'id du badge est : %d\n", id_badge);
+            printf("\nUne personne est entré dans le bâtiment ! L'id du badge est : %d\n", id_badge);
             // Enregistrement de l'entré d'une personne dans le journal
             journalCanal ! id_badge, ENTRE;
             nbPersonnesDansBatiment++;
@@ -142,7 +142,7 @@ proctype personne(int id_badge){
         autoriseCanal ? autorisation;
         if::(autorisation == OUI) // Si le badge est valide
             wait(DEUX_SECONDES);
-            printf("\nUne personne est sorti du batîment ! L'id du badge est : %d\n", id_badge);
+            printf("\nUne personne est sorti du bâtiment ! L'id du badge est : %d\n", id_badge);
             // Enregistrement de la sorti d'une personne dans le journal
             journalCanal ! id_badge, SORTI;
             nbPersonnesDansBatiment--;
@@ -181,12 +181,14 @@ proctype porte(){
             fi
             wait(CINQ_SECONDES);
             voyantCanal ! ROUGE;
+            wait(DEUX_SECONDES);
             printf("\nLa porte est bloqué ! \n");
         ::(id == OUVERTURE_SECOURS) // Si un incendie est détecté par le capteur d'incendie
             printf("\nToutes les portes sont débloquées !\n");
         ::else // Personnes non-autorisé
             autoriseCanal ! NON; 
-            printf("\nLa personne n'est pas autorisé\n");
+            voyantCanal ! ROUGE;
+            printf("\nLa personne n'est pas autorisé. La porte reste bloqué !\n");
         fi
     od
 }
@@ -216,10 +218,13 @@ proctype alarme(){
 // Agent qui est contrôlé par la porte et contrôle l'éclairage et du voyant vert ou rouge
 proctype voyant(){
     do::
-        voyantCanal ? VERT;
+        int couleur;
+        voyantCanal ? couleur;
+        if::(couleur == VERT)
         printf("\nLe voyant est vert ! \n");
-        voyantCanal ? ROUGE;
+        ::else
         printf("\nLe voyant est rouge ! \n");
+        fi
     od
 }
 
@@ -229,7 +234,7 @@ proctype affichage(){
         wait(TRENTE_SECONDES);
         printf("\n\n");
         printf("--------------  BATIMENT MAURIENNE  --------------\n");
-        printf("Nombre de personnes présents dans le batîment : %d \n\n", nbPersonnesDansBatiment);
+        printf("Nombre de personnes présents dans le bâtiment : %d \n\n", nbPersonnesDansBatiment);
         afficher_journal();
     od
 }
